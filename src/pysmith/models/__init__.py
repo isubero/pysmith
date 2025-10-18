@@ -54,3 +54,50 @@ class Model(ABC):
         pyd_model = cls._get_or_create_pydantic_model()
         pyd_instance = pyd_model.model_validate_json(json_data)
         return cls(**pyd_instance.model_dump())
+
+    @classmethod
+    def to_sqlalchemy_model(
+        cls,
+        base: Any,
+        table_name: str | None = None,
+        primary_key_field: str = "id",
+        string_length: int = 255,
+    ) -> Any:
+        """
+        Convert this Model class to a SQLAlchemy model.
+
+        Args:
+            base: The SQLAlchemy DeclarativeBase to inherit from
+            table_name: Optional table name (defaults to lowercase class name)
+            primary_key_field: Name of the primary key field (default: "id")
+            string_length: Default length for String columns (default: 255)
+
+        Returns:
+            A SQLAlchemy model class
+
+        Example:
+            ```python
+            from sqlalchemy.orm import DeclarativeBase
+            from pysmith.models import Model
+
+            class Base(DeclarativeBase):
+                pass
+
+            class User(Model):
+                id: int
+                name: str
+                email: str
+
+            # Convert to SQLAlchemy
+            UserSQLAlchemy = User.to_sqlalchemy_model(Base, table_name="users")
+            ```
+        """
+        from pysmith.db.adapters import create_sqlalchemy_model_from_model
+
+        return create_sqlalchemy_model_from_model(
+            cls,
+            base=base,
+            table_name=table_name,
+            primary_key_field=primary_key_field,
+            string_length=string_length,
+        )

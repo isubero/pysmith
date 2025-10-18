@@ -37,20 +37,30 @@ pip install pysmith
 ## 💻 Quick Start (Planned)
 
 ```python
-from pysmith.models import Model, Field
-
+# 1. Define your Model (for validation)
 class User(Model):
-    id: int = Field(autogenerate=True)
-    name: str
+    id: int
+    username: str
+    email: str
+    age: Optional[int]
 
+# 2. Validate incoming data
+user_data = {"id": 1, "username": "alice", "email": "alice@example.com", "age": 30}
+validated_user = User(**user_data)  # ✅ Pydantic validation
 
-user = User(name="John Doe")
-user.save()
+# 3. Convert to SQLAlchemy (for persistence)
+UserSQLAlchemy = User.to_sqlalchemy_model(Base, table_name="users")
 
-print(user.json())
+# 4. Save to database
+with Session(engine) as session:
+    db_user = UserSQLAlchemy(**user_data)
+    session.add(db_user)
+    session.commit()
 
-#> {"id": "46657696-3477-43e8-996e-b71555fe3565", "name": "John Doe"}
-
+# 5. Query and convert to DTO (for API response)
+from pysmith.db import create_pydantic_model_from_sqlalchemy
+UserDTO = create_pydantic_model_from_sqlalchemy(UserSQLAlchemy)
+response = UserDTO(**db_user.__dict__)
 ```
 
 ## 🔨 CLI (Planned)
