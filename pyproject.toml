@@ -1,0 +1,14 @@
+[project]
+name = "pysmith"
+version = "0.0.1"
+description = "A set of Python tools focused on productivity"
+readme = "README.md"
+authors = [
+    { name = "Isaías Subero", email = "info@isaiassubero.com" }
+]
+requires-python = ">=3.12.3"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.9.3,<0.10.0"]
+build-backend = "uv_build"
