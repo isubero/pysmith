@@ -18,13 +18,14 @@
 - Auto-creates database tables on first use
 - Method chaining support (`.save()` returns self)
 
-### 3. Nested Relations Strategy
+### 3. Type-Safe Relationships (ORM-Style)
 
-- **Phase 1 (Implemented)**: Foreign key IDs only
-  - Use `author_id: int` instead of `author: Author`
-  - Clear and explicit
-  - No magic behavior
-  - Full control over save order
+- **Implemented**: Annotated relationships with auto FK extraction
+  - Use `author: Annotated[Optional["Author"], Relation()]`
+  - Pass objects directly: `Book(author=author_obj)`
+  - FKs automatically extracted: `author.id` → `author_id`
+  - Full type safety with IDE support
+  - Django-style simplicity
 
 ### 4. Documentation
 
@@ -35,8 +36,9 @@
 ## 🎯 Usage Example
 
 ```python
+from typing import Annotated, Optional
 from sqlalchemy.orm import DeclarativeBase
-from pysmith.models import Model
+from pysmith.models import Model, Relation
 from pysmith.db import configure
 
 # 1. Setup (once at app startup)
@@ -45,26 +47,38 @@ class Base(DeclarativeBase):
 
 configure('sqlite:///myapp.db', Base)
 
-# 2. Define models
-class User(Model):
+# 2. Define models with relationships
+class Author(Model):
     id: int
-    username: str
+    name: str
     email: str
+    books: Annotated[list["Book"], Relation(back_populates="author")] = []
 
-# 3. Use it!
-user = User(id=1, username="alice", email="alice@example.com")
-user.save()  # ✅ Validates AND persists
+class Book(Model):
+    id: int
+    title: str
+    # author_id auto-generated!
+    author: Annotated[Optional["Author"], Relation(back_populates="books")] = None
+
+# 3. ORM-style usage!
+author = Author(id=1, name="alice", email="alice@example.com", books=[]).save()
+book = Book(id=1, title="Python Guide", author=author).save()  # ✨ FK auto-extracted!
 
 # 4. Query
-found = User.find_by_id(1)
-all_users = User.find_all()
+found = Book.find_by_id(1)
+all_books = Book.find_all()
 
 # 5. Update
-found.email = "new@example.com"  # type: ignore
-found.save()  # type: ignore
+found.title = "Python Deep Dive"
+found.save()
 
-# 6. Delete
-found.delete()  # type: ignore
+# 6. Update relationship
+new_author = Author(id=2, name="Bob", email="bob@example.com", books=[]).save()
+found.author = new_author
+found.save()  # ✨ FK automatically updated!
+
+# 7. Delete
+found.delete()
 ```
 
 ## 🔧 How It Works
@@ -111,55 +125,62 @@ Database
    - Invalid data fails before database interaction
    - Type safety maintained throughout
 
-4. **Foreign Keys Only (Phase 1)**
-   - Use `author_id: int` not `author: Author`
-   - Clear intent, no magic
-   - Prevents circular dependency issues
-   - Can manually join when needed
+4. **ORM-Style Relationships**
+   - Use `Annotated[Optional["Author"], Relation()]`
+   - Pass objects directly, FKs auto-extracted
+   - Type-safe with full IDE support
+   - Django-style simplicity with Python type safety
 
-## 📝 Nested Relations Strategy
+## 📝 Relationship Strategy
 
-### Current (Phase 1): Foreign Keys
+### Current: ORM-Style with Annotated ✅ IMPLEMENTED
 
 ```python
+from typing import Annotated, Optional
+from pysmith.models import Model, Relation
+
 class Author(Model):
     id: int
     name: str
+    books: Annotated[list["Book"], Relation(back_populates="author")] = []
 
 class Book(Model):
     id: int
     title: str
-    author_id: int  # ✅ Foreign key
+    # author_id auto-generated!
+    author: Annotated[Optional["Author"], Relation(back_populates="books")] = None
 
-# Usage
-author = Author(id=1, name="Jane").save()
-book = Book(id=1, title="Book", author_id=author.id).save()
+# ORM-style: Pass objects directly!
+author = Author(id=1, name="Jane", books=[]).save()
+book = Book(id=1, title="Book", author=author).save()
+# ✨ author_id automatically extracted from author.id!
 
-# Manual join when needed
-book = Book.find_by_id(1)
-author = Author.find_by_id(book.author_id)  # type: ignore
+# Update relationships
+book.author = new_author
+book.save()  # ✨ FK updated automatically!
 ```
 
-### Future (Phase 2): Smart Cascade
+### Future (Phase 3): Lazy Loading 🚧 NEXT
 
 ```python
-class Book(Model):
-    id: int
-    title: str
-    author: Author  # 🚧 Nested object (future)
+# Lazy loading on access
+book = Book.find_by_id(1)
+author = book.author  # ← Auto-loads from author_id (no manual query!)
+print(author.name)  # Works magically!
 
-# Auto-save nested models
-author = Author(id=1, name="Jane")
-book = Book(id=1, title="Book", author=author)
-book.save()  # Would auto-save author first
+# Eager loading to avoid N+1
+books = Book.find_all(prefetch=['author'])
+for book in books:
+    print(book.author.name)  # No extra queries!
 ```
 
-### Why Phase 1 First?
+### Why This Approach?
 
-1. **Simpler** - No circular dependency handling needed
-2. **Explicit** - Clear what's being saved and when
-3. **Standard** - Matches SQL semantics
-4. **Proven** - Can build Phase 2 on top without breaking Phase 1
+1. **Type-Safe** - Full `Annotated` support with IDE autocomplete
+2. **ORM-like** - Pass objects naturally, like Django
+3. **Auto FK** - No manual ID extraction needed
+4. **Standard Python** - Uses PEP 593 `Annotated`
+5. **Future-proof** - Foundation for lazy loading
 
 ## 📂 Files Created/Modified
 
@@ -246,24 +267,24 @@ Phase 1 is production-ready and doesn't limit future features.
 
 ### High Priority
 
-1. Fix test isolation (session per test)
-2. Add `filter()` / `where()` methods for queries
-3. Add transactions support (`with SessionContext()`)
-4. Documentation on README
+1. ✅ ~~Fix test isolation~~ DONE (86 tests passing)
+2. Lazy loading relationships (access `book.author` directly)
+3. Query builder (`filter()`, `where()`, `order_by()`)
+4. Eager loading / prefetch (solve N+1 problem)
 
 ### Medium Priority
 
-5. Implement Phase 2 nested relations (smart cascade)
-6. Add `update()` / `create()` class methods
+5. Better error messages
+6. Helper methods for relationships
 7. Pagination support for `find_all()`
-8. Query builder API
+8. Transactions support (`with transaction()`)
 
-### Low Priority
+### Lower Priority
 
-9. Lazy loading relationships
-10. Eager loading / prefetch
-11. Collection relationships (one-to-many)
-12. Many-to-many support
+9. Async support (async_save, async_find)
+10. Many-to-many relationships
+11. Migrations system
+12. CLI tooling
 
 ## 💡 Key Insights
 

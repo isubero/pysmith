@@ -1,24 +1,26 @@
-# Nested Relations Guide for Pysmith Models
+# Relations Guide for Pysmith Models
 
-This guide explains how to handle relationships between models in Pysmith.
+This guide explains how to work with relationships between models in Pysmith.
 
 ## Overview
 
-Pysmith Models support relationships between entities, but the current implementation prioritizes **explicit foreign keys** over nested object graphs. This design choice provides:
+Pysmith Models support **type-safe, ORM-style relationships** using Python's `Annotated` type. This approach provides:
 
-- ✅ Clear, predictable behavior
-- ✅ Better control over database operations
-- ✅ Easier debugging
-- ✅ Compatibility with standard SQL patterns
+- ✅ Full type safety with IDE autocomplete
+- ✅ Automatic foreign key generation
+- ✅ ORM-style object assignment
+- ✅ Django-like simplicity
+- ✅ Standard Python (PEP 593 Annotated)
 
-## Current Approach: Foreign Keys (Phase 1) ✅ IMPLEMENTED
+## Current Approach: Annotated Relationships ✅ IMPLEMENTED
 
 ### How It Works
 
-Define relationships using foreign key IDs, not nested objects:
+Define relationships using `Annotated` with `Relation()`:
 
 ```python
-from pysmith.models import Model
+from typing import Annotated, Optional
+from pysmith.models import Model, Relation
 from pysmith.db import configure
 from sqlalchemy.orm import DeclarativeBase
 
@@ -27,106 +29,86 @@ class Base(DeclarativeBase):
 
 configure('sqlite:///app.db', Base)
 
-# Define models with foreign keys
+# Define models with relationships
 class Author(Model):
     id: int
     name: str
     email: str
+    books: Annotated[list["Book"], Relation(back_populates="author")] = []
 
 class Book(Model):
     id: int
     title: str
-    author_id: int  # Foreign key, not nested Author object
     pages: int
+    # Foreign key 'author_id' auto-generated!
+    author: Annotated[Optional["Author"], Relation(back_populates="books")] = None
 ```
 
-### Usage Pattern
+### Usage Pattern (ORM-Style)
 
 ```python
-# 1. Save the parent first
-author = Author(id=1, name="Jane Doe", email="jane@example.com")
+# 1. Create and save parent
+author = Author(id=1, name="Jane Doe", email="jane@example.com", books=[])
 author.save()
 
-# 2. Reference it by ID
-book = Book(id=1, title="Python Guide", author_id=author.id, pages=300)
-book.save()
+# 2. Pass object directly - FK extracted automatically!
+book = Book(id=1, title="Python Guide", pages=300, author=author)
+book.save()  # ✨ author_id automatically set to author.id
 
-# 3. Manual joins when needed
+# 3. Manual joins (for now, lazy loading coming soon)
 book = Book.find_by_id(1)
-if book:
-    author = Author.find_by_id(book.author_id)
+if book.author_id:  # type: ignore
+    author = Author.find_by_id(book.author_id)  # type: ignore
     print(f"{book.title} by {author.name}")
 ```
 
 ### Pros
 
-- ✅ Explicit and predictable
-- ✅ No magic behavior
-- ✅ Easy to understand
-- ✅ Matches SQL semantics
-- ✅ Full control over save order
+- ✅ Type-safe and explicit
+- ✅ ORM-style object assignment
+- ✅ Automatic FK extraction
+- ✅ IDE autocomplete support
+- ✅ Django-like simplicity
+- ✅ Standard Python (Annotated)
 
-### Cons
+### Current Limitations
 
-- ❌ Manual joins required
-- ❌ More verbose
-- ❌ No automatic cascade
+- Manual joins required (lazy loading coming in Phase 3)
 
 ---
 
-## Future Approach: Nested Objects (Phase 2) 🚧 PLANNED
+## Advanced Features (Phase 3) 🚧 COMING SOON
 
-### Smart Cascade Save
+### Lazy Loading
 
-Automatically detect and save nested Model instances:
+Automatically load relationships when accessed:
 
 ```python
-class Author(Model):
-    id: int
-    name: str
-
-class Book(Model):
-    id: int
-    title: str
-    author: Author  # Nested object!
-
-# Smart save: detects nested model and saves both
-author = Author(id=1, name="Jane")
-book = Book(id=1, title="My Book", author=author)
-book.save()  # Saves author first, then book with author_id
+book = Book.find_by_id(1)
+# Lazy load: fetches author automatically
+author = book.author  # ← No manual query needed!
+print(author.name)  # Works magically!
 ```
 
-### Strategy Rules (Planned)
+### Implementation Plan
 
-1. **If nested model has ID**: Assume it exists, extract ID only
-2. **If nested model lacks ID**: Save it first, then use generated ID
-3. **Circular dependencies**: Detect and raise clear error
-4. **None values**: Handle gracefully as NULL foreign keys
-
-### Implementation Considerations
+Property descriptors that auto-query when accessed:
 
 ```python
-def _extract_nested_models(self) -> dict[str, Any]:
-    """
-    Phase 2 enhancement: Auto-save nested models.
-
-    Current behavior (Phase 1):
-    - Checks if value is a Model instance
-    - Extracts the ID if it exists
-    - Raises error if no ID (model must be saved first)
-
-    Planned behavior (Phase 2):
-    - Detect nested Model instances
-    - Auto-save them if they don't have an ID
-    - Extract the ID and create foreign key field
-    - Handle circular dependencies
-    """
-    pass
+@property
+def author(self) -> Optional["Author"]:
+    """Lazy-load author from author_id."""
+    if not hasattr(self, '_author_cache'):
+        if self.author_id:
+            self._author_cache = Author.find_by_id(self.author_id)
+        else:
+            self._author_cache = None
+    return self._author_cache
 ```
 
 ---
 
-## Advanced Patterns (Phase 3) 🔮 FUTURE
+## Advanced Patterns (Phase 4) 🔮 FUTURE
 
 ### Lazy Loading
 
@@ -205,56 +187,64 @@ book.author = author  # Nested object via relationship()
 
 ## Recommendations
 
-### For Now (Phase 1)
+### Current Best Practices
 
-✅ **Use foreign key IDs explicitly**
+✅ **Use Annotated relationships**
 
 ```python
+from typing import Annotated, Optional
+from pysmith.models import Relation
+
 class Book(Model):
     id: int
     title: str
-    author_id: int  # ✓ Do this
+    # ✓ Do this - type-safe with auto FK
+    author: Annotated[Optional["Author"], Relation()] = None
 ```
 
-❌ **Don't try to nest objects**
+✅ **Pass objects directly**
 
 ```python
-class Book(Model):
-    id: int
-    title: str
-    author: Author  # ✗ Not yet supported
+# ORM-style object assignment
+author = Author(id=1, name="Jane").save()
+book = Book(id=1, title="Guide", author=author).save()
+# ✨ author_id auto-extracted!
 ```
 
-✅ **Create helper methods for joins**
+✅ **Update relationships naturally**
+
+```python
+book.author = new_author
+book.save()  # FK automatically updated
+```
+
+✅ **Use helper methods for manual joins**
 
 ```python
 class Book(Model):
-    id: int
-    title: str
-    author_id: int
-
     def get_author(self) -> Optional[Author]:
         """Helper to fetch related author."""
-        return Author.find_by_id(self.author_id)
+        if self.author_id:  # type: ignore
+            return Author.find_by_id(self.author_id)  # type: ignore
+        return None
 
 # Usage
 book = Book.find_by_id(1)
-author = book.get_author()
+author = book.get_author()  # Convenient!
 ```
 
-### When Phase 2 Arrives
+### Backward Compatibility
 
-You'll be able to upgrade gradually:
+Old-style FK declarations still work:
 
 ```python
-# Phase 1 code (still works)
-book = Book(id=1, title="Guide", author_id=1)
-book.save()
+# Still supported (backward compatible)
+class Book(Model):
+    id: int
+    title: str
+    author_id: int  # Manual FK
 
-# Phase 2 code (new capability)
-author = Author(id=1, name="Jane")
-book = Book(id=1, title="Guide", author=author)  # Nested object
-book.save()  # Auto-saves author first
+book = Book(id=1, title="Guide", author_id=1).save()
 ```
 
 ---
@@ -306,25 +296,26 @@ This is standard SQL that works with any database system.
 
 ## Migration Path
 
-### Current State (Phase 1)
+### Current State (Phase 2 Complete!)
 
-- ✅ Simple foreign key IDs
-- ✅ Manual relationship traversal
-- ✅ Full control over saves
+- ✅ Type-safe Annotated relationships
+- ✅ Automatic FK generation
+- ✅ ORM-style object assignment
+- ✅ FK extraction from objects
+- ✅ Relationship updates
+- ✅ Full type safety
 
-### Next Steps (Phase 2)
+### Next Steps (Phase 3)
 
-- 🚧 Auto-detect nested Model instances
-- 🚧 Smart cascade saves
-- 🚧 Circular dependency detection
+- 🚧 Lazy loading relationships
+- 🚧 Eager loading / prefetch
+- 🚧 Collection methods
 
-### Future Vision (Phase 3)
+### Future Vision (Phase 4)
 
-- 🔮 Lazy loading relationships
-- 🔮 Eager loading / prefetch
-- 🔮 Collection relationships
 - 🔮 Many-to-many support
 - 🔮 Query traversal (Django-style)
+- 🔮 Async support
 
 ---
 
@@ -362,4 +353,4 @@ Ideas for Phase 2 implementation:
 
 ---
 
-**Status**: Phase 1 ✅ Complete | Phase 2 🚧 Planned | Phase 3 🔮 Vision
+**Status**: Phase 2 ✅ Complete | Phase 3 🚧 Next | Phase 4 🔮 Vision

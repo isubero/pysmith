@@ -10,9 +10,9 @@
 
 Pysmith is functional and ready for testing! Core features are implemented:
 
+- ✅ Persistance and validation from a single model (DRY)
 - ✅ Model class with Pydantic validation
 - ✅ Django-style ORM (save, delete, find)
-- ✅ Hidden session management
 - ✅ Type-safe relationships with auto FK generation
 - ✅ Automatic table creation
 - ✅ Full type safety with IDE support
@@ -37,8 +37,12 @@ Pysmith is a modern set of python tools that combines:
 - [x] DB Session management
 - [x] Type-safe relationships with Annotated
 - [x] Auto foreign key generation
-- [ ] Relationship lazy loading
-- [ ] Query builder (filter, where)
+- [ ] Relationship lazy loading (next priority)
+- [ ] Query builder (filter, where, order_by)
+- [ ] Async support (async_save, async_find)
+- [ ] Eager loading / prefetch
+- [ ] Many-to-many relationships
+- [ ] Migrations system
 - [ ] Auth utilities
 - [ ] CLI tooling
 - [ ] Testing utilities
