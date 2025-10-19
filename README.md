@@ -13,7 +13,9 @@ Pysmith is functional and ready for testing! Core features are implemented:
 - ✅ Model class with Pydantic validation
 - ✅ Django-style ORM (save, delete, find)
 - ✅ Hidden session management
+- ✅ Type-safe relationships with auto FK generation
 - ✅ Automatic table creation
+- ✅ Full type safety with IDE support
 
 Visit the github repository for updates and to report issues.
 
@@ -33,8 +35,10 @@ Pysmith is a modern set of python tools that combines:
 - [x] SQLAlchemy adapters
 - [x] Django-style ORM (save, find, delete)
 - [x] DB Session management
+- [x] Type-safe relationships with Annotated
+- [x] Auto foreign key generation
+- [ ] Relationship lazy loading
 - [ ] Query builder (filter, where)
-- [ ] Relationships (lazy loading)
 - [ ] Auth utilities
 - [ ] CLI tooling
 - [ ] Testing utilities
@@ -145,22 +149,29 @@ configure('sqlite:///app.db', Base)  # Once at startup
 # Sessions managed automatically!
 ```
 
-### Relationships
+### Type-Safe Relationships
 
-Foreign key support (nested objects coming soon):
+Use `Annotated` with `Relation()` for ORM-style object relationships:
 
 ```python
+from typing import Annotated, Optional
+from pysmith.models import Relation
+
 class Author(Model):
     id: int
     name: str
+    books: Annotated[list["Book"], Relation(back_populates="author")] = []
 
 class Book(Model):
     id: int
     title: str
-    author_id: int  # Foreign key
+    # Foreign key 'author_id' auto-generated!
+    author: Annotated[Optional["Author"], Relation(back_populates="books")] = None
 
-author = Author(id=1, name="Jane").save()
-book = Book(id=1, title="Python Guide", author_id=author.id).save()
+# ORM-style: Pass objects directly!
+author = Author(id=1, name="Jane", books=[]).save()
+book = Book(id=1, title="Python Guide", author=author).save()
+# author_id automatically extracted! ✨
 ```
 
 ## 🔨 CLI (Planned)
@@ -176,8 +187,17 @@ pysmith db migrate
 
 Check out the `examples/` directory for complete working examples:
 
-- `django_style_orm_example.py` - CRUD operations and relationships
+- `django_style_orm_example.py` - CRUD operations and basic relationships
+- `relationships_example.py` - Type-safe relationships with Annotated
+- `type_safety_example.py` - Type safety benefits
 - `sqlalchemy_pydantic_example.py` - Converting between models
+
+## 📖 Documentation
+
+- `RELATIONSHIPS.md` - Complete guide to type-safe relationships
+- `TYPE_SAFETY_IMPROVEMENTS.md` - How type safety works
+- `NESTED_RELATIONS_GUIDE.md` - Relationship strategies and roadmap
+- `IMPLEMENTATION_SUMMARY.md` - Architecture overview
 
 ## 🤝 Contributing
 

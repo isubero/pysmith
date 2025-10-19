@@ -5,6 +5,8 @@ Forge Python projects with precision and elegance.
 Status: Under active development
 """
 
+from pysmith.models import Model, Relation
+
 __version__ = "0.0.1"
 __author__ = "Isaías Subero"
 
@@ -19,4 +21,4 @@ def forge():
     return "⚒️  Pysmith is forging... Stay tuned for the craft!"
 
 
-__all__ = ["forge", "__version__"]
+__all__ = ["forge", "__version__", "Model", "Relation"]
