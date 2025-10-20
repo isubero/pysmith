@@ -10,6 +10,7 @@ requires-python = ">=3.12.3"
 dependencies = [
     "pydantic>=2.12.3",
     "pytest>=8.4.2",
+    "pytest-cov>=6.0.0",
     "ruff>=0.14.1",
     "sqlalchemy>=2.0.44",
 ]
@@ -30,6 +31,14 @@ addopts = [
 
 [tool.ruff]
 line-length = 79
+
+[tool.ruff.lint]
+# Ignore F821 (undefined name) in type annotations - forward references are valid
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+# Allow undefined names in type annotations (forward references)
+"tests/test_*.py" = ["F821"]
 
 [tool.mypy]
 python_version = "3.12"

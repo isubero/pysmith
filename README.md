@@ -5,6 +5,9 @@
 [![PyPI](https://img.shields.io/pypi/v/pysmith.svg)](https://pypi.org/project/pysmith/)
 [![Python](https://img.shields.io/pypi/pyversions/pysmith.svg)](https://pypi.org/project/pysmith/)
 [![License](https://img.shields.io/pypi/l/pysmith.svg)](https://github.com/isubero/pysmith/blob/main/LICENSE)
+[![Tests](https://github.com/isubero/pysmith/workflows/Tests/badge.svg)](https://github.com/isubero/pysmith/actions)
+[![Code Quality](https://img.shields.io/badge/code%20quality-ruff-blue)](https://github.com/astral-sh/ruff)
+[![Type Checked](https://img.shields.io/badge/type%20checked-mypy-blue)](http://mypy-lang.org/)
 
 ## ⚠️ Status: Alpha Release
 

@@ -96,7 +96,7 @@ class TestLazyLoading:
 
         # Create data
         author = Author(id=1, name="Jane").save()
-        book = Book(id=1, title="Book", author=author).save()
+        Book(id=1, title="Book", author=author).save()
 
         # Query book
         found_book = Book.find_by_id(1)
@@ -123,7 +123,7 @@ class TestLazyLoading:
             category: Annotated[Optional["Category"], Relation()]
 
         # Create product without category
-        product = Product(id=1, name="Widget", category=None).save()
+        Product(id=1, name="Widget", category=None).save()
 
         # Query back
         found = Product.find_by_id(1)
@@ -150,7 +150,7 @@ class TestLazyLoading:
         author2 = Author(id=2, name="Bob").save()
 
         # Create book with first author
-        book = Book(id=1, title="Book", author=author1).save()
+        Book(id=1, title="Book", author=author1).save()
 
         # Query and verify first author loads
         found = Book.find_by_id(1)
@@ -184,7 +184,7 @@ class TestLazyLoading:
         # Create users and post
         user1 = User(id=1, username="alice").save()
         user2 = User(id=2, username="bob").save()
-        post = Post(id=1, title="Post", author=user1, reviewer=user2).save()
+        Post(id=1, title="Post", author=user1, reviewer=user2).save()
 
         # Query back
         found = Post.find_by_id(1)
@@ -219,7 +219,7 @@ class TestLazyLoading:
         # Create chain
         author = Author(id=1, name="Jane").save()
         book = Book(id=1, title="Python", author=author).save()
-        review = Review(id=1, rating=5, book=book).save()
+        Review(id=1, rating=5, book=book).save()
 
         # Query review and navigate chain
         found_review = Review.find_by_id(1)
@@ -296,7 +296,7 @@ class TestLazyLoading:
 
         # Create parent and child
         electronics = Category(id=1, name="Electronics", parent=None).save()
-        laptops = Category(id=2, name="Laptops", parent=electronics).save()
+        Category(id=2, name="Laptops", parent=electronics).save()
 
         # Query child and lazy load parent
         found = Category.find_by_id(2)

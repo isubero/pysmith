@@ -58,7 +58,7 @@ def example_basic_lazy_load():
 
     # Create author and book
     author = Author(id=1, name="Jane Doe", email="jane@example.com").save()
-    book = Book(id=1, title="Python Mastery", pages=500, author=author).save()
+    Book(id=1, title="Python Mastery", pages=500, author=author).save()
 
     # Query the book
     found_book = Book.find_by_id(1)
@@ -86,7 +86,7 @@ def example_lazy_load_chain():
     # Create chain: Author → Book → Review
     author = Author(id=2, name="John Smith", email="john@example.com").save()
     book = Book(id=2, title="Django Guide", pages=400, author=author).save()
-    review = Review(id=1, rating=5, comment="Excellent!", book=book).save()
+    Review(id=1, rating=5, comment="Excellent!", book=book).save()
 
     # Query the review
     found_review = Review.find_by_id(1)
@@ -114,7 +114,7 @@ def example_multiple_relationships():
     publisher = Publisher(id=1, name="TechBooks", city="NYC").save()
 
     # Create book with multiple relationships
-    book = Book(
+    Book(
         id=3,
         title="Advanced Python",
         pages=600,
@@ -145,7 +145,7 @@ def example_caching():
 
     # Create data
     author = Author(id=4, name="Bob", email="bob@example.com").save()
-    book = Book(id=4, title="Caching Demo", pages=300, author=author).save()
+    Book(id=4, title="Caching Demo", pages=300, author=author).save()
 
     # Query book
     found = Book.find_by_id(4)
@@ -177,7 +177,7 @@ def example_none_relationship():
     print("=" * 60)
 
     # Create book without author
-    book = Book(id=5, title="No Author Yet", pages=250, author=None).save()
+    Book(id=5, title="No Author Yet", pages=250, author=None).save()
 
     # Query back
     found = Book.find_by_id(5)
