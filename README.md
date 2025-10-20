@@ -13,6 +13,7 @@ Pysmith is functional and ready for testing! Core features are implemented:
 - ✅ Persistance and validation from a single model (DRY)
 - ✅ Model class with Pydantic validation
 - ✅ Django-style ORM (save, delete, find)
+- ✅ Lazy-loading relationships (just access `book.author`!)
 - ✅ Type-safe relationships with auto FK generation
 - ✅ Automatic table creation
 - ✅ Full type safety with IDE support
@@ -37,10 +38,10 @@ Pysmith is a modern set of python tools that combines:
 - [x] DB Session management
 - [x] Type-safe relationships with Annotated
 - [x] Auto foreign key generation
-- [ ] Relationship lazy loading (next priority)
-- [ ] Query builder (filter, where, order_by)
+- [x] Relationship lazy loading
+- [ ] Query builder (filter, where, order_by) - next priority
+- [ ] Eager loading / prefetch (solve N+1)
 - [ ] Async support (async_save, async_find)
-- [ ] Eager loading / prefetch
 - [ ] Many-to-many relationships
 - [ ] Migrations system
 - [ ] Auth utilities
@@ -153,9 +154,9 @@ configure('sqlite:///app.db', Base)  # Once at startup
 # Sessions managed automatically!
 ```
 
-### Type-Safe Relationships
+### Lazy-Loading Relationships
 
-Use `Annotated` with `Relation()` for ORM-style object relationships:
+Relationships automatically load when accessed - no manual joins needed!
 
 ```python
 from typing import Annotated, Optional
@@ -175,7 +176,10 @@ class Book(Model):
 # ORM-style: Pass objects directly!
 author = Author(id=1, name="Jane", books=[]).save()
 book = Book(id=1, title="Python Guide", author=author).save()
-# author_id automatically extracted! ✨
+
+# Lazy loading: Just access the relationship!
+found = Book.find_by_id(1)
+print(found.author.name)  # ✨ Auto-loads author - no manual query!
 ```
 
 ## 🔨 CLI (Planned)
@@ -191,7 +195,8 @@ pysmith db migrate
 
 Check out the `examples/` directory for complete working examples:
 
-- `django_style_orm_example.py` - CRUD operations and basic relationships
+- `django_style_orm_example.py` - CRUD operations and ORM-style relationships
+- `lazy_loading_example.py` - Automatic relationship loading (no manual joins!)
 - `relationships_example.py` - Type-safe relationships with Annotated
 - `type_safety_example.py` - Type safety benefits
 - `sqlalchemy_pydantic_example.py` - Converting between models

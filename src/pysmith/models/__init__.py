@@ -14,6 +14,95 @@ from pydantic import BaseModel, Field, create_model
 T = TypeVar("T", bound="Model")
 
 
+class LazyLoader:
+    """
+    Descriptor for lazy-loading relationships.
+
+    Automatically queries related objects when accessed, caching the result
+    to avoid repeated queries.
+
+    Example:
+        ```python
+        book = Book.find_by_id(1)
+        author = book.author  # ← Auto-loads from author_id
+        print(author.name)    # No manual query needed!
+        ```
+    """
+
+    def __init__(
+        self, relationship_name: str, target_model_name: str, fk_field: str
+    ):
+        """
+        Initialize lazy loader.
+
+        Args:
+            relationship_name: Name of the relationship field (e.g., "author")
+            target_model_name: Name of the target model class (e.g., "Author")
+            fk_field: Name of the foreign key field (e.g., "author_id")
+        """
+        self.relationship_name = relationship_name
+        self.target_model_name = target_model_name
+        self.fk_field = fk_field
+        self.cache_attr = f"_lazy_{relationship_name}"
+
+    def __get__(self, obj: Any, objtype: Any = None) -> Any:
+        """
+        Get the related object, loading it if necessary.
+
+        Returns cached value if available, otherwise queries the database.
+        """
+        if obj is None:
+            # Accessed on class, not instance
+            return self
+
+        # Check if already cached
+        if hasattr(obj, self.cache_attr):
+            return getattr(obj, self.cache_attr)
+
+        # Get the foreign key value
+        fk_value = getattr(obj, self.fk_field, None)
+
+        if fk_value is None:
+            # FK is None, so relationship is None
+            setattr(obj, self.cache_attr, None)
+            return None
+
+        # Lazy load: query the related object
+        # We need to get the actual model class to call find_by_id
+        # For now, we'll store the resolved class when setting up the descriptor
+        target_class = getattr(
+            obj.__class__, f"_rel_class_{self.relationship_name}", None
+        )
+
+        if target_class is None:
+            # Fallback: relationship not loaded yet
+            return None
+
+        # Query the related object
+        related_obj = target_class.find_by_id(fk_value)
+
+        # Cache it
+        setattr(obj, self.cache_attr, related_obj)
+
+        return related_obj
+
+    def __set__(self, obj: Any, value: Any) -> None:
+        """
+        Set the relationship, updating both the cache and FK.
+
+        When you assign a Model instance, extracts its ID to the FK field.
+        """
+        # Update the cache
+        setattr(obj, self.cache_attr, value)
+
+        # Update the FK
+        if isinstance(value, Model):
+            if hasattr(value, "id"):
+                setattr(obj, self.fk_field, getattr(value, "id"))
+        elif value is None:
+            setattr(obj, self.fk_field, None)
+
+
 class Relation:
     """
     Metadata class for declaring relationships between models.
@@ -62,32 +151,50 @@ class Model(ABC):
     """
     Base class for all models with validation and persistence.
 
-    Provides Django-style ORM capabilities with Pydantic validation.
+    Provides Django-style ORM capabilities with Pydantic validation and
+    lazy-loading relationships.
 
     Example:
         ```python
-        from pysmith.models import Model
+        from typing import Annotated, Optional
+        from pysmith.models import Model, Relation
         from pysmith.db.session import configure
 
         # Configure database (once at app startup)
         configure('sqlite:///app.db', Base)
 
-        # Define model
-        class User(Model):
+        # Define models with relationships
+        class Author(Model):
             id: int
-            username: str
-            email: str
+            name: str
 
-        # Use it
-        user = User(id=1, username="alice", email="alice@example.com")
-        user.save()  # Persists to database
+        class Book(Model):
+            id: int
+            title: str
+            author: Annotated[Optional["Author"], Relation()] = None
+
+        # Use it with lazy loading
+        book = Book.find_by_id(1)
+        print(book.author.name)  # ← Auto-loads author!
         ```
     """
 
     _pydantic_model_cache: dict[type, type[BaseModel]] = {}
     _sqlalchemy_model_cache: dict[type, type] = {}
+    _lazy_loaders_setup: dict[
+        type, bool
+    ] = {}  # Track if lazy loaders are set up
+    _model_registry: dict[
+        str, type["Model"]
+    ] = {}  # Registry of model classes by name
     pydantic_instance: BaseModel
     _db_instance: Optional[Any] = None  # SQLAlchemy instance
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Register model subclasses for lazy loading resolution."""
+        super().__init_subclass__(**kwargs)
+        # Register this model class by name
+        Model._model_registry[cls.__name__] = cls
 
     def __init__(self, **kwargs: Any) -> None:
         # Extract relationships and handle Model objects
@@ -163,6 +270,53 @@ class Model(ABC):
                         break
 
         return relationships
+
+    @classmethod
+    def _setup_lazy_loaders(cls) -> None:
+        """
+        Set up lazy loading descriptors for relationship fields.
+
+        This is called once per model class to replace relationship fields
+        with LazyLoader descriptors that auto-query related objects.
+        """
+        # Only set up once per class
+        if cls in Model._lazy_loaders_setup:
+            return
+
+        relationships = cls._extract_relationships()
+        foreign_keys = cls._generate_foreign_keys(relationships)
+
+        # Set up lazy loaders for each relationship that has a FK
+        for rel_field, relation_meta in relationships.items():
+            fk_field = f"{rel_field}_id"
+
+            # Only set up lazy loader if this is a many-to-one relationship
+            if fk_field in foreign_keys:
+                # Get the target model name from the type hint
+                type_hint = cls.__annotations__[rel_field]
+                target_type = cls._unwrap_type(type_hint)
+
+                # Extract the model name (handle forward refs)
+                if isinstance(target_type, str):
+                    target_model_name = target_type
+                elif hasattr(target_type, "__name__"):
+                    target_model_name = target_type.__name__
+                elif hasattr(target_type, "__forward_arg__"):
+                    target_model_name = target_type.__forward_arg__
+                else:
+                    target_model_name = str(target_type)
+
+                # Create and set the lazy loader descriptor
+                loader = LazyLoader(rel_field, target_model_name, fk_field)
+                setattr(cls, rel_field, loader)
+
+                # Store the target class reference for the lazy loader
+                # Try to resolve the target class from the registry
+                target_class = Model._model_registry.get(target_model_name)
+                if target_class:
+                    setattr(cls, f"_rel_class_{rel_field}", target_class)
+
+        Model._lazy_loaders_setup[cls] = True
 
     @classmethod
     def _unwrap_type(cls, type_hint: Any) -> Any:
@@ -331,6 +485,9 @@ class Model(ABC):
     @classmethod
     def _get_or_create_sqlalchemy_model(cls) -> type:
         """Get the cached SQLAlchemy model or create it if not cached."""
+        # Set up lazy loaders first (if not already done)
+        cls._setup_lazy_loaders()
+
         if cls not in Model._sqlalchemy_model_cache:
             from pysmith.db.session import get_base, get_engine
 
