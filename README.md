@@ -182,6 +182,36 @@ found = Book.find_by_id(1)
 print(found.author.name)  # ✨ Auto-loads author - no manual query!
 ```
 
+### Required vs Optional Relationships
+
+Pysmith validates required relationships **before** hitting the database:
+
+```python
+class Book(Model):
+    id: int
+    title: str
+    # Required (no Optional) - book MUST have an author
+    author: Annotated["Author", Relation()] = None  # type: ignore
+    # Optional - book may or may not have a publisher
+    publisher: Annotated[Optional["Publisher"], Relation()] = None
+
+# ✅ With required relationship - works
+book = Book(id=1, title="Guide", author=author_obj).save()
+
+# ❌ Missing required relationship - clear error
+book = Book(id=2, title="Guide", author=None)
+book.save()
+# ValueError: Required relationship 'author' cannot be None.
+#             Please provide a Author instance.
+```
+
+**Benefits:**
+
+- 🚨 **Fail Fast** - Errors at Python level, not database
+- 💬 **Clear Messages** - Tells you exactly what's missing
+- 🎯 **Type Safe** - IDE knows what's required
+- 🔒 **Data Integrity** - Enforces NOT NULL constraints
+
 ## 🔨 CLI (Planned)
 
 ```bash
@@ -198,6 +228,7 @@ Check out the `examples/` directory for complete working examples:
 - `django_style_orm_example.py` - CRUD operations and ORM-style relationships
 - `lazy_loading_example.py` - Automatic relationship loading (no manual joins!)
 - `relationships_example.py` - Type-safe relationships with Annotated
+- `required_relationships_example.py` - Required vs optional relationships with validation
 - `type_safety_example.py` - Type safety benefits
 - `sqlalchemy_pydantic_example.py` - Converting between models
 

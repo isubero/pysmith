@@ -402,7 +402,7 @@ class Model(ABC):
 
             # Now check if it's a list
             list_origin = get_origin(check_type)
-            if list_origin == list:  # type: ignore[comparison-overlap]
+            if str(list_origin) == str(list):
                 # One-to-many relationship, skip FK generation
                 continue
 
@@ -588,6 +588,78 @@ class Model(ABC):
 
         return data
 
+    def _validate_required_relationships(self) -> None:
+        """
+        Validate that required relationships (non-Optional) are not None.
+
+        Provides early, clear error messages before hitting the database.
+
+        Raises:
+            ValueError: If a required relationship is None
+
+        Example:
+            ```python
+            class OrderItem(Model):
+                id: int
+                product: Annotated["Product", Relation()]  # Required!
+
+            # This raises immediately with clear message:
+            item = OrderItem(id=1, product=None)
+            item.save()
+            # ✗ ValueError: Required relationship 'product' cannot be None.
+            #              Please provide a Product instance.
+            ```
+        """
+        relationships = self.__class__._extract_relationships()
+        foreign_keys = self.__class__._generate_foreign_keys(relationships)
+
+        for rel_field in relationships.keys():
+            fk_field = f"{rel_field}_id"
+
+            # Check if this relationship has a FK (many-to-one)
+            if fk_field in foreign_keys:
+                fk_type = foreign_keys[fk_field]
+
+                # Check if FK type is required (int, not Optional[int])
+                # Optional[int] will have get_origin(fk_type) pointing to Union
+                import typing
+
+                fk_origin = get_origin(fk_type)
+                is_optional = str(fk_origin) == str(typing.Union)
+
+                if not is_optional:
+                    # This is a required relationship
+                    fk_value = getattr(self, fk_field, None)
+
+                    if fk_value is None:
+                        # Get target model name for error message
+                        type_hint = self.__class__.__annotations__[rel_field]
+                        target_type = self.__class__._unwrap_type(type_hint)
+
+                        # Format target name - handle ForwardRef
+                        if isinstance(target_type, str):
+                            target_name = target_type
+                        elif hasattr(target_type, "__forward_arg__"):
+                            # ForwardRef in Python 3.11+
+                            target_name = target_type.__forward_arg__
+                        elif hasattr(target_type, "__name__"):
+                            target_name = target_type.__name__
+                        else:
+                            # Last resort: convert to string and clean up
+                            target_str = str(target_type)
+                            if "ForwardRef('" in target_str:
+                                # Extract name from ForwardRef('Name')
+                                target_name = target_str.split("('")[1].rstrip(
+                                    "')"
+                                )
+                            else:
+                                target_name = target_str
+
+                        raise ValueError(
+                            f"Required relationship '{rel_field}' cannot be None. "
+                            f"Please provide a {target_name} instance."
+                        )
+
     def save(self) -> Self:
         """
         Save this model instance to the database.
@@ -618,6 +690,9 @@ class Model(ABC):
             book = Book(id=1, title="Book", author_id=author.id).save()
             ```
         """
+        # Validate required relationships before hitting the database
+        self._validate_required_relationships()
+
         from pysmith.db.session import get_session
 
         session = get_session()
